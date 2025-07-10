@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Electron Configuration Calculator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom font for better aesthetics */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Style for superscripts */
+        sup {
+            vertical-align: super;
+            font-size: 0.7em; /* Smaller superscript font size */
+        }
+        /* Style for subscripts */
+        sub {
+            vertical-align: sub;
+            font-size: 0.7em; /* Smaller subscript font size */
+        }
+        /* Custom styles for the message box */
+        .message-box {
+            display: none;
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+        }
+        .message-box.error {
+            color: #b91c1c; /* Red-700 */
+            background-color: #fee2e2; /* Red-100 */
+            border: 1px solid #fca5a5; /* Red-300 */
+        }
+        .message-box.success {
+            color: #065f46; /* Green-700 */
+            background-color: #d1fae5; /* Green-100 */
+            border: 1px solid #a7f3d0; /* Green-300 */
+        }
+        /* Hide elements initially for animations or conditional display */
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-100 to-purple-200 min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md border border-blue-200">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Electron Configuration</h1>
+        <p class="text-center text-gray-600 mb-8">Enter an atomic number to find its electron configuration.</p>
+
+        <div class="mb-6">
+            <label for="atomicNumber" class="block text-gray-700 text-sm font-semibold mb-2">Atomic Number (Z):</label>
+            <input type="number" id="atomicNumber" min="1" max="118" placeholder="e.g., 17 (Chlorine)"
+                   class="shadow-sm appearance-none border border-gray-300 rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200 ease-in-out">
+        </div>
+
+        <button id="calculateBtn"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition duration-200 ease-in-out transform hover:scale-105 shadow-md">
+            Calculate Configuration
+        </button>
+
+        <!-- New button for showing expanded orbitals -->
+        <button id="showOrbitalsBtn"
+                class="hidden mt-4 w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-75 transition duration-200 ease-in-out transform hover:scale-105 shadow-md">
+            Show Expanded Orbitals
+        </button>
+
+        <div id="result" class="mt-8 p-6 bg-blue-50 border border-blue-200 rounded-lg text-gray-800 text-lg font-medium break-words">
+            <p class="text-center text-gray-500">Your electron configuration will appear here.</p>
+        </div>
+
+        <!-- New div for expanded orbital view -->
+        <div id="expandedOrbitalsResult" class="hidden mt-4 p-6 bg-purple-50 border border-purple-200 rounded-lg text-gray-800 text-lg font-medium break-words">
+            <p class="text-center text-gray-500">Expanded orbital view will appear here.</p>
+        </div>
+
+        <div id="messageBox" class="message-box">
+            <!-- Error messages will be displayed here -->
+        </div>
+    </div>
+
+    <script>
+        // Get references to HTML elements
+        const atomicNumberInput = document.getElementById('atomicNumber');
+        const calculateButton = document.getElementById('calculateBtn');
+        const showOrbitalsButton = document.getElementById('showOrbitalsBtn');
+        const resultDiv = document.getElementById('result');
+        const expandedOrbitalsResultDiv = document.getElementById('expandedOrbitalsResult');
+        const messageBox = document.getElementById('messageBox');
+
+        // Define the order of orbitals and their maximum capacities (Aufbau principle)
+        const orbitals = [
+            { name: '1s', capacity: 2 },
+            { name: '2s', capacity: 2 },
+            { name: '2p', capacity: 6 },
+            { name: '3s', capacity: 2 },
+            { name: '3p', capacity: 6 },
+            { name: '4s', capacity: 2 },
+            { name: '3d', capacity: 10 },
+            { name: '4p', capacity: 6 },
+            { name: '5s', capacity: 2 },
+            { name: '4d', capacity: 10 },
+            { name: '5p', capacity: 6 },
+            { name: '6s', capacity: 2 },
+            { name: '4f', capacity: 14 },
+            { name: '5d', capacity: 10 },
+            { name: '6p', capacity: 6 },
+            { name: '7s', capacity: 2 },
+            { name: '5f', capacity: 14 },
+            { name: '6d', capacity: 10 },
+            { name: '7p', capacity: 6 }
+        ];
+
+        // Define a list of elements by atomic number for lookup
+        const elements = [
+            null, // Atomic number 0 is not used
+            { name: 'Hydrogen', symbol: 'H' }, // 1
+            { name: 'Helium', symbol: 'He' }, // 2
+            { name: 'Lithium', symbol: 'Li' }, // 3
+            { name: 'Beryllium', symbol: 'Be' }, // 4
+            { name: 'Boron', symbol: 'B' }, // 5
+            { name: 'Carbon', symbol: 'C' }, // 6
+            { name: 'Nitrogen', symbol: 'N' }, // 7
+            { name: 'Oxygen', symbol: 'O' }, // 8
+            { name: 'Fluorine', symbol: 'F' }, // 9
+            { name: 'Neon', symbol: 'Ne' }, // 10
+            { name: 'Sodium', symbol: 'Na' }, // 11
+            { name: 'Magnesium', symbol: 'Mg' }, // 12
+            { name: 'Aluminum', symbol: 'Al' }, // 13
+            { name: 'Silicon', symbol: 'Si' }, // 14
+            { name: 'Phosphorus', symbol: 'P' }, // 15
+            { name: 'Sulfur', symbol: 'S' }, // 16
+            { name: 'Chlorine', symbol: 'Cl' }, // 17
+            { name: 'Argon', symbol: 'Ar' }, // 18
+            { name: 'Potassium', symbol: 'K' }, // 19
+            { name: 'Calcium', symbol: 'Ca' }, // 20
+            { name: 'Scandium', symbol: 'Sc' }, // 21
+            { name: 'Titanium', symbol: 'Ti' }, // 22
+            { name: 'Vanadium', symbol: 'V' }, // 23
+            { name: 'Chromium', symbol: 'Cr' }, // 24
+            { name: 'Manganese', symbol: 'Mn' }, // 25
+            { name: 'Iron', symbol: 'Fe' }, // 26
+            { name: 'Cobalt', symbol: 'Co' }, // 27
+            { name: 'Nickel', symbol: 'Ni' }, // 28
+            { name: 'Copper', symbol: 'Cu' }, // 29
+            { name: 'Zinc', symbol: 'Zn' }, // 30
+            { name: 'Gallium', symbol: 'Ga' }, // 31
+            { name: 'Germanium', symbol: 'Ge' }, // 32
+            { name: 'Arsenic', symbol: 'As' }, // 33
+            { name: 'Selenium', symbol: 'Se' }, // 34
+            { name: 'Bromine', symbol: 'Br' }, // 35
+            { name: 'Krypton', symbol: 'Kr' }, // 36
+            { name: 'Rubidium', symbol: 'Rb' }, // 37
+            { name: 'Strontium', symbol: 'Sr' }, // 38
+            { name: 'Yttrium', symbol: 'Y' }, // 39
+            { name: 'Zirconium', symbol: 'Zr' }, // 40
+            { name: 'Niobium', symbol: 'Nb' }, // 41
+            { name: 'Molybdenum', symbol: 'Mo' }, // 42
+            { name: 'Technetium', symbol: 'Tc' }, // 43
+            { name: 'Ruthenium', symbol: 'Ru' }, // 44
+            { name: 'Rhodium', symbol: 'Rh' }, // 45
+            { name: 'Palladium', symbol: 'Pd' }, // 46
+            { name: 'Silver', symbol: 'Ag' }, // 47
+            { name: 'Cadmium', symbol: 'Cd' }, // 48
+            { name: 'Indium', symbol: 'In' }, // 49
+            { name: 'Tin', symbol: 'Sn' }, // 50
+            { name: 'Antimony', symbol: 'Sb' }, // 51
+            { name: 'Tellurium', symbol: 'Te' }, // 52
+            { name: 'Iodine', symbol: 'I' }, // 53
+            { name: 'Xenon', symbol: 'Xe' }, // 54
+            { name: 'Cesium', symbol: 'Cs' }, // 55
+            { name: 'Barium', symbol: 'Ba' }, // 56
+            { name: 'Lanthanum', symbol: 'La' }, // 57
+            { name: 'Cerium', symbol: 'Ce' }, // 58
+            { name: 'Praseodymium', symbol: 'Pr' }, // 59
+            { name: 'Neodymium', symbol: 'Nd' }, // 60
+            { name: 'Promethium', symbol: 'Pm' }, // 61
+            { name: 'Samarium', symbol: 'Sm' }, // 62
+            { name: 'Europium', symbol: 'Eu' }, // 63
+            { name: 'Gadolinium', symbol: 'Gd' }, // 64
+            { name: 'Terbium', symbol: 'Tb' }, // 65
+            { name: 'Dysprosium', symbol: 'Dy' }, // 66
+            { name: 'Holmium', symbol: 'Ho' }, // 67
+            { name: 'Erbium', symbol: 'Er' }, // 68
+            { name: 'Thulium', symbol: 'Tm' }, // 69
+            { name: 'Ytterbium', symbol: 'Yb' }, // 70
+            { name: 'Lutetium', symbol: 'Lu' }, // 71
+            { name: 'Hafnium', symbol: 'Hf' }, // 72
+            { name: 'Tantalum', symbol: 'Ta' }, // 73
+            { name: 'Tungsten', symbol: 'W' }, // 74
+            { name: 'Rhenium', symbol: 'Re' }, // 75
+            { name: 'Osmium', symbol: 'Os' }, // 76
+            { name: 'Iridium', symbol: 'Ir' }, // 77
+            { name: 'Platinum', symbol: 'Pt' }, // 78
+            { name: 'Gold', symbol: 'Au' }, // 79
+            { name: 'Mercury', symbol: 'Hg' }, // 80
+            { name: 'Thallium', symbol: 'Tl' }, // 81
+            { name: 'Lead', symbol: 'Pb' }, // 82
+            { name: 'Bismuth', symbol: 'Bi' }, // 83
+            { name: 'Polonium', symbol: 'Po' }, // 84
+            { name: 'Astatine', symbol: 'At' }, // 85
+            { name: 'Radon', symbol: 'Rn' }, // 86
+            { name: 'Francium', symbol: 'Fr' }, // 87
+            { name: 'Radium', symbol: 'Ra' }, // 88
+            { name: 'Actinium', symbol: 'Ac' }, // 89
+            { name: 'Thorium', symbol: 'Th' }, // 90
+            { name: 'Protactinium', symbol: 'Pa' }, // 91
+            { name: 'Uranium', symbol: 'U' }, // 92
+            { name: 'Neptunium', symbol: 'Np' }, // 93
+            { name: 'Plutonium', symbol: 'Pu' }, // 94
+            { name: 'Americium', symbol: 'Am' }, // 95
+            { name: 'Curium', symbol: 'Cm' }, // 96
+            { name: 'Berkelium', symbol: 'Bk' }, // 97
+            { name: 'Californium', symbol: 'Cf' }, // 98
+            { name: 'Einsteinium', symbol: 'Es' }, // 99
+            { name: 'Fermium', symbol: 'Fm' }, // 100
+            { name: 'Mendelevium', symbol: 'Md' }, // 101
+            { name: 'Nobelium', symbol: 'No' }, // 102
+            { name: 'Lawrencium', symbol: 'Lr' }, // 103
+            { name: 'Rutherfordium', symbol: 'Rf' }, // 104
+            { name: 'Dubnium', symbol: 'Db' }, // 105
+            { name: 'Seaborgium', symbol: 'Sg' }, // 106
+            { name: 'Bohrium', symbol: 'Bh' }, // 107
+            { name: 'Hassium', symbol: 'Hs' }, // 108
+            { name: 'Meitnerium', symbol: 'Mt' }, // 109
+            { name: 'Darmstadtium', symbol: 'Ds' }, // 110
+            { name: 'Roentgenium', symbol: 'Rg' }, // 111
+            { name: 'Copernicium', symbol: 'Cn' }, // 112
+            { name: 'Nihonium', symbol: 'Nh' }, // 113
+            { name: 'Flerovium', symbol: 'Fl' }, // 114
+            { name: 'Moscovium', symbol: 'Mc' }, // 115
+            { name: 'Livermorium', symbol: 'Lv' }, // 116
+            { name: 'Tennessine', symbol: 'Ts' }, // 117
+            { name: 'Oganesson', symbol: 'Og' } // 118
+        ];
+
+        // Variable to store the detailed configuration for expansion
+        let currentDetailedConfiguration = [];
+
+        /**
+         * Displays a message in the message box.
+         * @param {string} message - The message to display.
+         * @param {string} type - The type of message ('error', 'success', etc.)
+         */
+        function showMessage(message, type = 'error') {
+            messageBox.textContent = message;
+            messageBox.className = `message-box ${type}`;
+            messageBox.style.display = 'block'; // Ensure it's visible
+        }
+
+        /**
+         * Hides the message box.
+         */
+        function hideMessageBox() {
+            messageBox.style.display = 'none';
+        }
+
+        /**
+         * Helper function to find and update an orbital's electron count.
+         * @param {Array<Object>} config - The configuration array.
+         * @param {string} name - The name of the orbital (e.g., '4s', '3d').
+         * @param {number} newElectrons - The new electron count for the orbital.
+         */
+        function updateOrbitalElectrons(config, name, newElectrons) {
+            const orbital = config.find(o => o.name === name);
+            if (orbital) {
+                orbital.electrons = newElectrons;
+            } else {
+                console.warn(`Orbital ${name} not found in configuration.`);
+            }
+        }
+
+        /**
+         * Defines and applies electron configuration exceptions.
+         * This Map stores functions that modify the configuration array in place.
+         */
+        const electronConfigurationExceptions = new Map([
+            // Common d-block exceptions
+            // Chromium (Cr, Z=24): [Ar] 4s¹ 3d⁵ (instead of 4s² 3d⁴)
+            [24, (config) => {
+                updateOrbitalElectrons(config, '4s', 1);
+                updateOrbitalElectrons(config, '3d', 5);
+                console.log("Applied Chromium exception (Z=24): 4s² 3d⁴ -> 4s¹ 3d⁵");
+            }],
+            // Copper (Cu, Z=29): [Ar] 4s¹ 3d¹⁰ (instead of 4s² 3d⁹)
+            [29, (config) => {
+                updateOrbitalElectrons(config, '4s', 1);
+                updateOrbitalElectrons(config, '3d', 10);
+                console.log("Applied Copper exception (Z=29): 4s² 3d⁹ -> 4s¹ 3d¹⁰");
+            }],
+            // Niobium (Nb, Z=41): [Kr] 5s¹ 4d⁴ (instead of 5s² 4d³)
+            [41, (config) => {
+                updateOrbitalElectrons(config, '5s', 1);
+                updateOrbitalElectrons(config, '4d', 4);
+                console.log("Applied Niobium exception (Z=41): 5s² 4d³ -> 5s¹ 4d⁴");
+            }],
+            // Molybdenum (Mo, Z=42): [Kr] 5s¹ 4d⁵ (instead of 5s² 4d⁴)
+            [42, (config) => {
+                updateOrbitalElectrons(config, '5s', 1);
+                updateOrbitalElectrons(config, '4d', 5);
+                console.log("Applied Molybdenum exception (Z=42): 5s² 4d⁴ -> 5s¹ 4d⁵");
+            }],
+            // Ruthenium (Ru, Z=44): [Kr] 5s¹ 4d⁷ (instead of 5s² 4d⁶)
+            [44, (config) => {
+                updateOrbitalElectrons(config, '5s', 1);
+                updateOrbitalElectrons(config, '4d', 7);
+                console.log("Applied Ruthenium exception (Z=44): 5s² 4d⁶ -> 5s¹ 4d⁷");
+            }],
+            // Rhodium (Rh, Z=45): [Kr] 5s¹ 4d⁸ (instead of 5s² 4d⁷)
+            [45, (config) => {
+                updateOrbitalElectrons(config, '5s', 1);
+                updateOrbitalElectrons(config, '4d', 8);
+                console.log("Applied Rhodium exception (Z=45): 5s² 4d⁷ -> 5s¹ 4d⁸");
+            }],
+            // Palladium (Pd, Z=46): [Kr] 5s⁰ 4d¹⁰ (instead of 5s² 4d⁸) - unique, completely empties 5s
+            [46, (config) => {
+                updateOrbitalElectrons(config, '5s', 0);
+                updateOrbitalElectrons(config, '4d', 10);
+                console.log("Applied Palladium exception (Z=46): 5s² 4d⁸ -> 5s⁰ 4d¹⁰");
+            }],
+            // Silver (Ag, Z=47): [Kr] 5s¹ 4d¹⁰ (instead of 5s² 4d⁹)
+            [47, (config) => {
+                updateOrbitalElectrons(config, '5s', 1);
+                updateOrbitalElectrons(config, '4d', 10);
+                console.log("Applied Silver exception (Z=47): 5s² 4d⁹ -> 5s¹ 4d¹⁰");
+            }],
+            // Platinum (Pt, Z=78): [Xe] 6s¹ 4f¹⁴ 5d⁹ (instead of 6s² 4f¹⁴ 5d⁸)
+            [78, (config) => {
+                updateOrbitalElectrons(config, '6s', 1);
+                updateOrbitalElectrons(config, '5d', 9);
+                console.log("Applied Platinum exception (Z=78): 6s² 4f¹⁴ 5d⁸ -> 6s¹ 4f¹⁴ 5d⁹");
+            }],
+            // Gold (Au, Z=79): [Xe] 6s¹ 4f¹⁴ 5d¹⁰ (instead of 6s² 4f¹⁴ 5d⁹)
+            [79, (config) => {
+                updateOrbitalElectrons(config, '6s', 1);
+                updateOrbitalElectrons(config, '5d', 10);
+                console.log("Applied Gold exception (Z=79): 6s² 4f¹⁴ 5d⁹ -> 6s¹ 4f¹⁴ 5d¹⁰");
+            }]
+        ]);
+
+        /**
+         * Calculates the electron configuration for a given atomic number,
+         * including exceptions for Cr, Cu, Nb, Mo, Ru, Rh, Pd, Ag, Pt, Au.
+         * Returns an array of objects, each representing an orbital and its electron count.
+         * @param {number} atomicNumber - The atomic number (number of electrons).
+         * @returns {Array<Object>} An array of orbital objects, or an empty array on error.
+         */
+        function getElectronConfigurationDetailed(atomicNumber) {
+            let remainingElectrons = atomicNumber;
+            let configuration = [];
+
+            // Iterate through orbitals in the specified order (Aufbau principle)
+            for (let i = 0; i < orbitals.length && remainingElectrons > 0; i++) {
+                const orbital = orbitals[i];
+                let electronsInOrbital = Math.min(remainingElectrons, orbital.capacity);
+                
+                configuration.push({ name: orbital.name, electrons: electronsInOrbital });
+                remainingElectrons -= electronsInOrbital;
+            }
+
+            // --- Apply electron configuration exceptions ---
+            if (electronConfigurationExceptions.has(atomicNumber)) {
+                electronConfigurationExceptions.get(atomicNumber)(configuration);
+            }
+
+            // If there are still electrons left (shouldn't happen for valid atomic numbers up to 118 with this orbital list)
+            if (remainingElectrons > 0) {
+                showMessage("Error: Could not fully configure electrons for this atomic number. Max Z supported is 118.", 'error');
+                return [];
+            }
+
+            return configuration;
+        }
+
+        /**
+         * Formats the detailed configuration into a display string with superscripts.
+         * @param {Array<Object>} detailedConfig - The detailed configuration array.
+         * @returns {string} The formatted electron configuration string.
+         */
+        function formatConfigurationForDisplay(detailedConfig) {
+            // Filter out orbitals with 0 electrons for cleaner display, only keeping Pd's 5s⁰ if applicable
+            return detailedConfig
+                .filter(o => o.electrons > 0 || (o.name === '5s' && o.electrons === 0 && atomicNumberInput.value == 46))
+                .map(o => `${o.name}<sup>${o.electrons}</sup>`)
+                .join(' ');
+        }
+
+        /**
+         * Distributes electrons into sub-orbitals following Hund's Rule.
+         * @param {string} orbitalPrefix - e.g., '2p', '3d', '4f'
+         * @param {number} totalElectrons - Total electrons in this orbital.
+         * @param {Array<string>} subOrbitalNames - Array of sub-orbital names (e.g., ['x', 'y', 'z']).
+         * @returns {string} HTML string representing the expanded sub-orbitals.
+         */
+        function distributeElectrons(orbitalPrefix, totalElectrons, subOrbitalNames) {
+            let electronsToDistribute = totalElectrons;
+            let subOrbitalCounts = new Array(subOrbitalNames.length).fill(0); // Initialize counts for each sub-orbital
+
+            // First pass: Fill one electron into each sub-orbital (Hund's Rule)
+            for (let i = 0; i < subOrbitalNames.length && electronsToDistribute > 0; i++) {
+                subOrbitalCounts[i]++;
+                electronsToDistribute--;
+            }
+
+            // Second pass: Pair up electrons in remaining sub-orbitals
+            for (let i = 0; i < subOrbitalNames.length && electronsToDistribute > 0; i++) {
+                if (subOrbitalCounts[i] < 2) { // Can only add one more electron to pair
+                    subOrbitalCounts[i]++;
+                    electronsToDistribute--;
+                }
+            }
+
+            // Construct the HTML string for the expanded sub-orbitals
+            let expandedHtml = subOrbitalNames.map((sub, index) => {
+                if (subOrbitalCounts[index] > 0) {
+                    // Wrap the sub-orbital name in <sub> tags
+                    return `${orbitalPrefix}<sub>${sub}</sub><sup>${subOrbitalCounts[index]}</sup>`;
+                }
+                return ''; // Don't display sub-orbitals with 0 electrons
+            }).filter(Boolean).join(' '); // Filter out empty strings and join
+
+            return expandedHtml;
+        }
+
+        /**
+         * Expands the electron configuration to show individual sub-orbitals for p, d, and f.
+         * @param {Array<Object>} detailedConfig - The detailed configuration array.
+         * @returns {string} HTML string of the fully expanded configuration.
+         */
+        function getExpandedOrbitalView(detailedConfig) {
+            let expandedParts = [];
+
+            for (const orbital of detailedConfig) {
+                const shellNum = orbital.name.charAt(0);
+                const orbitalType = orbital.name.substring(1);
+
+                // Only expand orbitals that actually have electrons
+                if (orbital.electrons > 0) {
+                    if (orbitalType === 's') {
+                        expandedParts.push(`${orbital.name}<sup>${orbital.electrons}</sup>`);
+                    } else if (orbitalType === 'p') {
+                        const pSubOrbitals = ['x', 'y', 'z']; // px, py, pz
+                        expandedParts.push(distributeElectrons(shellNum + 'p', orbital.electrons, pSubOrbitals));
+                    } else if (orbitalType === 'd') {
+                        // Standard d-orbital names with superscripts for powers
+                        // The 'sub' part itself will be wrapped in <sub> by distributeElectrons
+                        const dSubOrbitalsHtml = ['xy', 'xz', 'yz', 'x<sup>2</sup>-y<sup>2</sup>', 'z<sup>2</sup>'];
+                        expandedParts.push(distributeElectrons(shellNum + 'd', orbital.electrons, dSubOrbitalsHtml));
+                    } else if (orbitalType === 'f') {
+                        // For f-orbitals, using f1, f2...f7 for simplicity as geometric names are complex
+                        const fSubOrbitals = ['1', '2', '3', '4', '5', '6', '7'];
+                        expandedParts.push(distributeElectrons(shellNum + 'f', orbital.electrons, fSubOrbitals));
+                    }
+                }
+            }
+            return expandedParts.join(' ');
+        }
+
+        /**
+         * Gets the element name and symbol for a given atomic number.
+         * @param {number} atomicNumber - The atomic number.
+         * @returns {object|null} An object with name and symbol, or null if not found.
+         */
+        function getElementNameAndSymbol(atomicNumber) {
+            if (atomicNumber >= 1 && atomicNumber < elements.length) {
+                return elements[atomicNumber];
+            }
+            return null;
+        }
+
+        // Event listener for the calculate button
+        calculateButton.addEventListener('click', () => {
+            hideMessageBox(); // Clear previous messages
+            expandedOrbitalsResultDiv.classList.add('hidden'); // Hide expanded view initially
+
+            const atomicNumber = parseInt(atomicNumberInput.value);
+
+            // Input validation
+            if (isNaN(atomicNumber) || atomicNumber < 1) {
+                showMessage("Please enter a valid positive atomic number.", 'error');
+                resultDiv.innerHTML = '<p class="text-center text-gray-500">Your electron configuration will appear here.</p>';
+                showOrbitalsButton.classList.add('hidden'); // Hide button if input is invalid
+                return;
+            }
+            if (atomicNumber > 118) {
+                showMessage("Atomic number too high. This calculator supports up to Z=118 (Oganesson).", 'error');
+                resultDiv.innerHTML = '<p class="text-center text-gray-500">Your electron configuration will appear here.</p>';
+                showOrbitalsButton.classList.add('hidden'); // Hide button if input is invalid
+                return;
+            }
+
+            // Get detailed configuration
+            currentDetailedConfiguration = getElectronConfigurationDetailed(atomicNumber);
+
+            // Format and display the standard configuration
+            const formattedConfig = formatConfigurationForDisplay(currentDetailedConfiguration);
+            const elementInfo = getElementNameAndSymbol(atomicNumber);
+
+            let resultHtml = '';
+            if (elementInfo) {
+                resultHtml += `<p class="text-center text-xl font-bold mb-2">${elementInfo.name} (${elementInfo.symbol})</p>`;
+            } else {
+                resultHtml += `<p class="text-center text-xl font-bold mb-2">Element Z=${atomicNumber}</p>`;
+            }
+            resultHtml += `<p class="text-center text-lg">${formattedConfig}</p>`;
+            
+            resultDiv.innerHTML = resultHtml;
+
+            // Show the "Show Orbitals" button only if calculation was successful
+            if (currentDetailedConfiguration.length > 0) {
+                showOrbitalsButton.classList.remove('hidden');
+            } else {
+                showOrbitalsButton.classList.add('hidden');
+            }
+        });
+
+        // Event listener for the "Show Expanded Orbitals" button
+        showOrbitalsButton.addEventListener('click', () => {
+            if (currentDetailedConfiguration.length > 0) {
+                const expandedView = getExpandedOrbitalView(currentDetailedConfiguration);
+                expandedOrbitalsResultDiv.innerHTML = `<p class="text-center text-lg font-semibold">Expanded View:</p><p class="text-center text-lg">${expandedView}</p>`;
+                expandedOrbitalsResultDiv.classList.remove('hidden'); // Show the expanded view
+            } else {
+                showMessage("Please calculate the configuration first.", 'error');
+            }
+        });
+
+        // Optional: Allow pressing Enter key to trigger calculation
+        atomicNumberInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                calculateButton.click();
+            }
+        });
+    </script>
+</body>
+</html>
